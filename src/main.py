@@ -1,5 +1,5 @@
 import tkinter as tk
-from tkinter import ttk, filedialog, simpledialog
+from tkinter import ttk, filedialog, simpledialog, messagebox
 import os
 import pyarrow.parquet as pq
 import json
@@ -86,9 +86,11 @@ class ParquetEditorApp:
         self.notebook = ttk.Notebook(editor_frame)
         self.notebook.pack(fill="both", expand=True, padx=10, pady=10)
 
+        # Add tabs for each metadata key
         for key, value in self.current_metadata.items():
             self.add_metadata_tab(key, value)
 
+        # Add a plus tab for adding new metadata keys
         self.add_plus_tab()
 
     def add_metadata_tab(self, key, value):
@@ -108,11 +110,20 @@ class ParquetEditorApp:
         current = self.notebook.index("current")
         if self.notebook.tab(current, "text") == "+":
             key = simpledialog.askstring("New Metadata Key", "Enter metadata key:")
-            if key and key not in self.tab_widgets:
-                self.notebook.forget(current)
-                self.add_metadata_tab(key, "")
-                self.add_plus_tab()
-                self.notebook.select(len(self.notebook.tabs()) - 2)
+            if key:
+                if key in self.tab_widgets:
+                    # Show error window if key already exists
+                    self.show_error_window(f"Metadata key '{key}' already exists.")
+                else:
+                    # Proceed to add the new tab
+                    self.notebook.forget(current)
+                    self.add_metadata_tab(key, "")
+                    self.add_plus_tab()
+                    self.notebook.select(len(self.notebook.tabs()) - 2)
+
+    def show_error_window(self, message):
+        # Create a message box that displays the error
+        messagebox.showerror("Duplicate Key Error", message)
 
     def save_metadata(self, file_path):
         new_metadata = {}
@@ -130,7 +141,6 @@ class ParquetEditorApp:
             print("Metadata saved successfully!")
         except Exception as e:
             print("Error saving metadata:", e)
-
 
     def clear_main_container(self):
         for widget in self.main_container.winfo_children():
