@@ -12,17 +12,35 @@ class ParquetEditorApp:
         self.root.geometry("700x500")
         self.root.configure(bg="#f5f5f5")
 
+        # Setup the style for the widgets
         style = ttk.Style()
         style.theme_use("default")
         style.configure("TNotebook.Tab", font=("Segoe UI", 11, "bold"), padding=[10, 5])
         style.configure("TButton", font=("Segoe UI", 10), padding=6)
 
+        # Menu bar setup
+        self.menu_bar = tk.Menu(self.root)
+        self.root.config(menu=self.menu_bar)
+
+        self.file_menu = tk.Menu(self.menu_bar, tearoff=0)
+        self.file_menu.add_command(label="Open File", command=self.open_new_file)
+        self.file_menu.add_command(label="Save Metadata", command=self.save_metadata_action)
+        self.file_menu.add_separator()
+        self.file_menu.add_command(label="Close", command=self.close_application)
+        self.menu_bar.add_cascade(label="File", menu=self.file_menu)
+
+        self.help_menu = tk.Menu(self.menu_bar, tearoff=0)
+        self.help_menu.add_command(label="Help & Support", command=self.show_help_screen)
+        self.menu_bar.add_cascade(label="Help", menu=self.help_menu)
+
+        # Initialize main container
         self.main_container = tk.Frame(self.root, bg="white")
         self.main_container.pack(fill="both", expand=True)
 
         self.current_metadata = {}
         self.notebook = None
         self.tab_widgets = {}
+        self.current_file = None  # To track the currently open file
 
         self.show_home_screen()
 
@@ -60,6 +78,17 @@ class ParquetEditorApp:
         back_button = ttk.Button(help_frame, text="Back", command=self.show_home_screen)
         back_button.pack(pady=20)
 
+    def open_new_file(self):
+        # Confirm abandonment of current file if any changes are made
+        if self.current_metadata:
+            confirm = messagebox.askyesno("Abandon Current File", "Do you want to abandon the current file?")
+            if not confirm:
+                return
+
+        file_path = filedialog.askopenfilename(filetypes=[("Parquet Files", "*.parquet")])
+        if file_path:
+            self.load_metadata_editor(file_path)
+
     def select_parquet_file(self):
         file_path = filedialog.askopenfilename(filetypes=[("Parquet Files", "*.parquet")])
         if file_path:
@@ -68,6 +97,7 @@ class ParquetEditorApp:
     def load_metadata_editor(self, file_path):
         self.clear_main_container()
         self.tab_widgets = {}
+        self.current_file = file_path  # Save the file path
 
         try:
             table = pq.read_table(file_path)
@@ -86,11 +116,9 @@ class ParquetEditorApp:
         self.notebook = ttk.Notebook(editor_frame)
         self.notebook.pack(fill="both", expand=True, padx=10, pady=10)
 
-        # Add tabs for each metadata key
         for key, value in self.current_metadata.items():
             self.add_metadata_tab(key, value)
 
-        # Add a plus tab for adding new metadata keys
         self.add_plus_tab()
 
     def add_metadata_tab(self, key, value):
@@ -112,18 +140,21 @@ class ParquetEditorApp:
             key = simpledialog.askstring("New Metadata Key", "Enter metadata key:")
             if key:
                 if key in self.tab_widgets:
-                    # Show error window if key already exists
                     self.show_error_window(f"Metadata key '{key}' already exists.")
                 else:
-                    # Proceed to add the new tab
                     self.notebook.forget(current)
                     self.add_metadata_tab(key, "")
                     self.add_plus_tab()
                     self.notebook.select(len(self.notebook.tabs()) - 2)
 
     def show_error_window(self, message):
-        # Create a message box that displays the error
         messagebox.showerror("Duplicate Key Error", message)
+
+    def save_metadata_action(self):
+        if self.current_file:
+            self.save_metadata(self.current_file)
+        else:
+            messagebox.showwarning("No File Open", "Please open a file first.")
 
     def save_metadata(self, file_path):
         new_metadata = {}
@@ -135,12 +166,17 @@ class ParquetEditorApp:
             table = pq.read_table(file_path)
             metadata_bytes = {k.encode(): v.encode() for k, v in new_metadata.items()}
             new_schema = table.schema.with_metadata(metadata_bytes)
-            table = table.cast(new_schema)  # update the table's schema
+            table = table.cast(new_schema)
 
-            pq.write_table(table, file_path)  # no need to pass `schema=...` again
+            pq.write_table(table, file_path)  
             print("Metadata saved successfully!")
         except Exception as e:
             print("Error saving metadata:", e)
+
+    def close_application(self):
+        confirm = messagebox.askyesno("Close Application", "Are you sure you want to exit?")
+        if confirm:
+            self.root.quit()
 
     def clear_main_container(self):
         for widget in self.main_container.winfo_children():
